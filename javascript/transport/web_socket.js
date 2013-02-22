@@ -23,14 +23,16 @@ Faye.Transport.WebSocket = Faye.extend(Faye.Class(Faye.Transport, {
   },
 
   close: function() {
-    if (this._closed) return;
-    this._closed = true;
-    if (this._socket) this._socket.close();
+    if (!this._socket) return;
+    this._socket.onclose = this._socket.onerror = null;
+    this._socket.close();
+    delete this._socket;
+    this.setDeferredStatus('deferred');
+    this._state = this.UNCONNECTED;
   },
 
   connect: function() {
     if (Faye.Transport.WebSocket._unloaded) return;
-    if (this._closed) return;
 
     this._state = this._state || this.UNCONNECTED;
     if (this._state !== this.UNCONNECTED) return;
@@ -61,11 +63,12 @@ Faye.Transport.WebSocket = Faye.extend(Faye.Class(Faye.Transport, {
       self.receive(messages);
     };
 
-    this._socket.onclose = function() {
+    this._socket.onclose = this._socket.onerror = function() {
       var wasConnected = (self._state === self.CONNECTED);
       self.setDeferredStatus('deferred');
       self._state = self.UNCONNECTED;
-      delete self._socket;
+
+      self.close();
 
       if (wasConnected) return self.resend();
       if (!self._everConnected) return self.setDeferredStatus('failed');
